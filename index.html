@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <title>落ち物ゲー</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="style.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="script.js" defer></script>
+</head>
+<body>
+    <h1>落ち物ゲー</h1>
+    <p>Pキー・Escキーで停止／再開</p>
+    <div id="gameWrap">
+        <canvas id="gameCanvas" style="display:none;"></canvas>
+
+        <!-- リザルト画面（クリア時にcanvasの上に重ねて表示） -->
+        <div id="resultOverlay">
+            <h2 class="result-title">クリア！</h2>
+            <div class="result-stats">
+                <div>最終スコア: <span id="resultScore">0</span></div>
+                <div>ミス回数: <span id="resultMiss">0</span></div>
+                <div>最大コンボ: <span id="resultMaxCombo">0</span></div>
+            </div>
+            <div id="resultChartBox"><canvas id="statsChart"></canvas></div>
+            <div class="result-buttons">
+                <button id="resultRetryBtn" class="btn-primary">もう一度（Space）</button>
+                <button id="resultBackBtn">スタート画面に戻る</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="startScreen">
+        <button id="loadLastBtn" type="button">前回プレイした設定を反映</button>
+        <h2>スペースキーまたは下のボタンでスタート！</h2>
+        <form id="configForm" novalidate>
+            <div>
+                <label>反応するキー（アルファベットのみ。例: DFJK または D,F,J,K）: </label>
+                <input type="text" id="keyConfig" value="D,F,J,K" />
+            </div>
+            <div>
+                <label>落下速度: </label>
+                <input type="number" id="speedConfig" value="3" min="1" max="20" />
+                <span id="speedPreview"></span>
+                <details id="speedTableBox">
+                    <summary>速度の目安</summary>
+                    <table id="speedTable" style="margin:4px auto; border-collapse:collapse; font-size:14px;"></table>
+                </details>
+            </div>
+            <div>
+                <label>間隔の指定方法: </label>
+                <label><input type="radio" name="intervalMode" value="ms" checked /> ms指定</label>
+                <label><input type="radio" name="intervalMode" value="bpm" /> BPM指定</label>
+            </div>
+            <div id="msRow">
+                <label>落下間隔（ms）: </label>
+                <input type="number" id="intervalConfig" value="200" min="50" max="2000" />
+            </div>
+            <div id="bpmRow">
+                <label>BPM: </label>
+                <input type="number" id="bpmConfig" value="120" min="30" max="400" />
+                <label> ノーツ間隔: </label>
+                <select id="divisionConfig">
+                    <option value="2">2分音符</option>
+                    <option value="4">4分音符</option>
+                    <option value="8" selected>8分音符</option>
+                    <option value="12">8分3連符</option>
+                    <option value="16">16分音符</option>
+                </select>
+                <span id="intervalPreview"></span>
+            </div>
+            <div>
+                <label>クリア条件: </label>
+                <label><input type="radio" name="clearMode" value="combo" checked /> コンボ数</label>
+                <label><input type="radio" name="clearMode" value="score" /> スコア</label>
+            </div>
+            <div id="clearComboRow">
+                <label>クリアコンボ数: </label>
+                <input type="number" id="clearComboConfig" value="50" min="1" max="10000" />
+            </div>
+            <div id="clearScoreRow">
+                <label>クリアスコア: </label>
+                <input type="number" id="clearScoreConfig" value="100" min="1" max="10000" />
+            </div>
+            <div>
+                <label><input type="checkbox" id="seConfig" checked /> 効果音・手拍子</label>
+            </div>
+            <div>
+                <label>コンボ表示の濃さ: </label>
+                <input type="range" id="comboOpacityConfig" min="0" max="100" step="5" value="85" style="vertical-align:middle;" />
+                <span id="comboOpacityValue">85%</span>
+            </div>
+            <div>
+                <label><input type="checkbox" id="autoPlayConfig" /> オートプレイ（プレビュー：自動で全部PERFECT）</label>
+            </div>
+        </form>
+        <button id="startBtn">スタート</button>
+    </div>
+
+    <div id="pauseMenu" style="display:none;">
+        <h2>一時停止中</h2>
+        <button id="resumeBtn">ゲーム再開</button>
+        <button id="restartBtn">最初から</button>
+        <button id="backToStartBtn">スタート画面に戻る</button>
+    </div>
+
+    <!-- ファイル不足・組み合わせミスの警告表示 -->
+    <div id="loadError" style="display:none; position:fixed; top:0; left:0; right:0; z-index:100; background:#b00020; color:#fff; padding:12px; font-size:16px;"></div>
+    <script>
+        window.addEventListener('load', function () {
+            if (typeof updateConfigUI !== 'function') {
+                var el = document.getElementById('loadError');
+                el.textContent = '⚠ script.js が読み込めていません。index.html と同じフォルダに「script.js」（script.js.txt ではなく）があるか確認してください。';
+                el.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,228 @@
+/* canvasとリザルト画面を重ねるための枠 */
+#gameWrap {
+    position: relative;
+    width: fit-content;
+    margin: 12px auto 0;
+}
+
+/* サイズ（幅・高さ）は script.js の fitCanvas() で画面に収まるよう設定 */
+#gameCanvas {
+    display: block;
+    margin: 0;
+    background: #222;
+    border: 2px solid #fff;
+    box-shadow: 0 0 20px #444;
+}
+
+/* リザルト画面 */
+#resultOverlay {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: safe center; /* 収まらない時は上から表示（上端が切れないように） */
+    gap: clamp(6px, 1.5vh, 12px);
+    padding: clamp(8px, 2vmin, 16px);
+    box-sizing: border-box;
+    background: rgba(0, 0, 0, 0.8);
+    border: 2px solid #fff;
+    z-index: 5;
+    overflow-y: auto; /* 小さい画面で収まらない時はスクロール */
+    container-type: size; /* 中の文字サイズ等を、画面ではなくこの枠（＝canvas）の大きさ基準（cqw/cqh）で決める */
+}
+#resultOverlay .result-title {
+    color: yellow;
+    font-size: clamp(18px, 8cqw, 44px);
+    margin: 0;
+}
+#resultOverlay .result-stats {
+    color: yellow;
+    font-size: clamp(13px, 5cqw, 26px);
+    line-height: 1.5;
+}
+#resultChartBox {
+    position: relative;
+    width: 100%;
+    max-width: 420px;
+    height: clamp(100px, 30cqh, 220px);
+    flex-shrink: 1;
+    min-height: 100px;
+    background: rgba(0, 0, 0, 0.8);
+    border: 2px solid #fff;
+    border-radius: 10px;
+    padding: 6px;
+    box-sizing: border-box;
+}
+.result-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px;
+}
+.result-buttons button {
+    font-size: clamp(12px, 4.5cqw, 20px);
+    padding: clamp(5px, 1.5cqh, 10px) clamp(8px, 4cqw, 22px);
+    border-radius: 8px;
+    border: 2px solid #fff;
+    background: #444;
+    color: #fff;
+    cursor: pointer;
+}
+.result-buttons button:hover {
+    filter: brightness(1.2);
+}
+.result-buttons .btn-primary {
+    background: #ffd400;
+    color: #000;
+    font-weight: bold;
+}
+
+.canvas-btn {
+    position: absolute;
+    left: 50%;
+    top: 60%;
+    transform: translate(-50%, -50%);
+    width: 240px;
+    height: 56px;
+    font-size: 24px;
+    background: #333;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px #222;
+    cursor: pointer;
+    padding: 10px 0;
+    white-space: nowrap;
+    text-align: center;
+    z-index: 30;
+}
+body {
+    margin: 0;
+    background: #000;
+    color: white;
+    text-align: center;
+}
+h1 {
+    font-size: clamp(24px, 7vw, 40px);
+    margin: 1px 0;
+}
+p {
+    font-size: clamp(14px, 4vw, 20px);
+    margin: 1px 0;
+}
+
+#startScreen {
+    position: fixed; /* 画面全体を覆う（スクロール位置やアドレスバーの出入りに影響されない） */
+    inset: 0;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    justify-content: safe center; /* 設定項目が画面に収まらない時は上から表示してスクロール */
+    align-items: center;
+    flex-direction: column;
+    overflow-y: auto;
+    box-sizing: border-box;
+    padding: 12px 16px;
+    z-index: 10;
+}
+#startScreen h2 {
+    font-size: clamp(18px, 5vw, 24px);
+    margin: 8px 0 12px;
+}
+#startScreen button {
+    font-size: clamp(18px, 5vw, 24px);
+    padding: 10px 20px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+/* 「前回プレイした設定を反映」ボタン（スタートボタンより控えめに） */
+#startScreen #loadLastBtn {
+    font-size: clamp(14px, 4vw, 16px);
+    padding: 6px 14px;
+}
+#startScreen #loadLastBtn:disabled {
+    cursor: not-allowed;
+}
+
+/* 設定フォーム：1項目1行。幅が足りない時は行内で折り返す */
+#configForm {
+    width: 100%;
+    max-width: 640px;
+    margin: 0 0 20px;
+    font-size: clamp(14px, 4vw, 16px);
+}
+#configForm > div {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 4px 8px;
+    margin: 8px 0;
+}
+#configForm input[type="text"],
+#configForm input[type="number"],
+#configForm select {
+    font-size: 16px; /* 16px未満だとスマホでフォーカス時に画面が拡大される */
+    padding: 4px 6px;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+#configForm input[type="text"] { width: 16em; }
+#configForm input[type="number"] { width: 6em; }
+#configForm input[type="range"] { max-width: 100%; }
+
+/* 入力チェックのエラー表示 */
+#configForm input.invalid {
+    outline: 2px solid #ff5a5a;
+    background: #ffe9e9;
+}
+.field-error {
+    display: none;
+    flex-basis: 100%;
+    color: #ff8080;
+    font-size: 14px;
+}
+
+/* 一時停止メニュー */
+#pauseMenu {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 20;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
+    padding: 16px;
+    box-sizing: border-box;
+    overflow-y: auto;
+}
+#pauseMenu h2 {
+    font-size: clamp(22px, 6vw, 32px);
+    margin: 0 0 8px;
+}
+#pauseMenu button {
+    font-size: clamp(16px, 4.5vw, 20px);
+    padding: 10px 20px;
+    width: min(100%, 260px);
+    cursor: pointer;
+}
+
+/* 高さの低い画面（スマホの横向きなど）：タイトルを隠してゲーム画面の高さを確保 */
+@media (max-height: 480px) {
+    h1 { display: none; }
+    p { font-size: 12px; }
+}
+
+/* ゲーム画面が小さい時：結果画面の数値を横並びにして詰める */
+@container (max-height: 420px) {
+    #resultOverlay .result-stats {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0 12px;
+        line-height: 1.3;
+    }
+    .result-buttons { gap: 6px 12px; }
+}
