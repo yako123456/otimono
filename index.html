@@ -83,6 +83,21 @@
                 <input type="number" id="clearScoreConfig" value="100" min="1" max="10000" />
             </div>
             <div>
+                <label><input type="checkbox" id="chordConfig" /> 同時押しを混ぜる</label>
+                <span id="chordRateRow">
+                    <label>確率（%）: </label>
+                    <input type="number" id="chordRateConfig" value="20" min="1" max="100" />
+                </span>
+            </div>
+            <div>
+                <label><input type="checkbox" id="sameLaneConfig" /> 同じレーンに連続で落ちてくるのを許可（OFF：直近2回のレーンを避ける）</label>
+            </div>
+            <div>
+                <label>判定調整（ms）: </label>
+                <input type="number" id="judgeOffsetConfig" value="0" min="-200" max="200" step="5" />
+                <span>LATEが多い→プラス／FASTが多い→マイナス</span>
+            </div>
+            <div>
                 <label><input type="checkbox" id="seConfig" checked /> 効果音・手拍子</label>
             </div>
             <div>

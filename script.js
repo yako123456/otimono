@@ -18,12 +18,17 @@ let bpm = 120; // BPM（BPM指定時）
 let seEnabled = true; // 効果音・手拍子ON/OFF
 let comboOpacity = 0.85; // 中央コンボ表示の濃さ（0〜1）
 let autoPlay = false; // オートプレイ（プレビュー）
+let chordEnabled = false; // 同時押し（2レーン同時）を混ぜるか
+let chordRate = 0.2; // 同時押しになる確率（0〜1）
+let allowSameLane = false; // 同じレーンに連続で落ちてくるのを許可するか
+let judgeOffsetPx = 0; // 判定タイミング調整（msを落下距離に換算した値。プラス＝判定を遅らせる）
 
 const FRAME_BASE = 60; // 速度・アニメーションの基準fps（旧仕様の「1フレームあたり」を秒あたりに換算する）
 
 // 判定ゾーンの変数
 let hitZoneTop, hitZoneBottom, hitZoneHeight;
 let fastZoneTop, fastZoneBottom, goodZoneTop, goodZoneBottom, lateZoneTop, lateZoneBottom;
+let earlyMissTop; // これより上（判定バーから離れすぎ）にあるノーツは、キーを押しても無視する（ミスにしない）
 
 // ゲーム状態管理用の変数
 const fallingObjs = []; // 落下オブジェクト配列
@@ -43,8 +48,8 @@ let statsChartInstance = null; // Chart.js のインスタンス
 
 // 統計情報
 let stats = { fast: 0, perfect: 0, late: 0, miss: 0 };
-let lastCol = -1; // 直前の列番号
-let prevCol = -1; // 2つ前の列番号
+let lastCols = []; // 直前に生成した列番号（同時押しなら2つ）
+let prevCols = []; // 2つ前に生成した列番号
 
 // 判定結果を表示するための変数
 let judgeTexts = []; // 判定テキストの配列
@@ -100,6 +105,9 @@ function resizeCanvasVars() {
     goodZoneBottom = hitZoneTop + hitZoneHeight * 0.7;
     lateZoneTop = goodZoneBottom;
     lateZoneBottom = hitZoneBottom;
+
+    // 早押しミスになる範囲（判定ゾーンの上、ゾーンの高さの半分まで）。それより上は無視
+    earlyMissTop = hitZoneTop - hitZoneHeight * 0.5;
 }
 
 window.addEventListener('resize', () => {
@@ -110,7 +118,7 @@ window.addEventListener('resize', () => {
 // 初期化（イベント登録はここに一本化）
 window.addEventListener('DOMContentLoaded', () => {
     // index.html が古い（新しい設定項目がない）場合は警告して止める
-    const required = ['speedPreview', 'bpmConfig', 'divisionConfig', 'clearComboConfig', 'seConfig', 'resultOverlay', 'comboOpacityConfig', 'autoPlayConfig', 'loadLastBtn'];
+    const required = ['speedPreview', 'bpmConfig', 'divisionConfig', 'clearComboConfig', 'seConfig', 'resultOverlay', 'comboOpacityConfig', 'autoPlayConfig', 'loadLastBtn', 'chordConfig', 'chordRateConfig', 'sameLaneConfig', 'judgeOffsetConfig'];
     const missing = required.filter(id => !document.getElementById(id));
     if (missing.length > 0) {
         const msg = '⚠ index.html が古いバージョンです。script.js と同じ時に渡した最新の index.html に置き換えてください。';
@@ -131,7 +139,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // 設定UIの切り替え・プレビュー
     document.querySelectorAll('input[name="intervalMode"], input[name="clearMode"]').forEach(r => r.addEventListener('change', updateConfigUI));
-    ['keyConfig', 'speedConfig', 'intervalConfig', 'bpmConfig', 'divisionConfig', 'clearComboConfig', 'clearScoreConfig', 'comboOpacityConfig'].forEach(id => document.getElementById(id).addEventListener('input', updateConfigUI));
+    ['keyConfig', 'speedConfig', 'intervalConfig', 'bpmConfig', 'divisionConfig', 'clearComboConfig', 'clearScoreConfig', 'comboOpacityConfig', 'chordConfig', 'chordRateConfig', 'judgeOffsetConfig'].forEach(id => document.getElementById(id).addEventListener('input', updateConfigUI));
     updateConfigUI();
 });
 
@@ -260,6 +268,11 @@ function updateConfigUI() {
     document.getElementById('clearComboRow').style.opacity = cMode === 'combo' ? 1 : 0.4;
     document.getElementById('clearScoreRow').style.opacity = cMode === 'score' ? 1 : 0.4;
 
+    // 同時押し（OFFの時は確率欄を使わない）
+    const chordOn = document.getElementById('chordConfig').checked;
+    document.getElementById('chordRateConfig').disabled = !chordOn;
+    document.getElementById('chordRateRow').style.opacity = chordOn ? 1 : 0.4;
+
     // 入力チェック（エラーがあれば各欄の下に表示）
     validateConfig();
 
@@ -362,8 +375,8 @@ class Falling {
     update(dt) {
         this.y += this.speed * dt;
 
-        // ヒットゾーンを通り過ぎた場合、ミス判定
-        if (!this.hit && !this.missed && this.y > hitZoneBottom) {
+        // ヒットゾーンを通り過ぎた場合、ミス判定（判定調整ぶんずらして判定する）
+        if (!this.hit && !this.missed && this.y - judgeOffsetPx > hitZoneBottom) {
             this.missed = true;
             registerMiss();
             judgeTexts.push(new JudgeText(this.x + this.width / 2, hitZoneBottom, 'MISS', 'gray'));
@@ -387,16 +400,27 @@ function registerMiss() {
     combo = 0;
 }
 
-// 落下オブジェクトを生成（直近2回の列と被らないように。列数が少ない場合は可能な範囲で避ける）
+// 落下オブジェクトを生成
+// ・同時押しON：設定した確率で、別々の2レーンに同時に落とす（レーンが2つ以上ある時のみ）
+// ・同じレーンの連続を許可：全レーンから完全ランダム
+// ・許可しない：直近2回の列と被らないように（列数が少ない場合は可能な範囲で避ける）
 function spawn() {
     const all = [...Array(columns).keys()];
-    let candidates = all.filter(c => c !== lastCol && c !== prevCol);
-    if (candidates.length === 0) candidates = all.filter(c => c !== lastCol); // 2列：直前だけ避ける
-    if (candidates.length === 0) candidates = all; // 1列：制約なし
-    const col = candidates[Math.floor(Math.random() * candidates.length)];
-    prevCol = lastCol;
-    lastCol = col;
-    fallingObjs.push(new Falling(col));
+    const count = chordEnabled && columns >= 2 && Math.random() < chordRate ? 2 : 1;
+    let pool = all;
+    if (!allowSameLane) {
+        pool = all.filter(c => !lastCols.includes(c) && !prevCols.includes(c));
+        if (pool.length < count) pool = all.filter(c => !lastCols.includes(c)); // 列が少ない：直前だけ避ける
+        if (pool.length < count) pool = all; // それでも足りない：制約なし
+    }
+    pool = [...pool];
+    const cols = [];
+    for (let i = 0; i < count; i++) {
+        cols.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+    }
+    prevCols = lastCols;
+    lastCols = cols;
+    for (const col of cols) fallingObjs.push(new Falling(col));
 }
 
 // ヒットゾーンを描画
@@ -468,7 +492,8 @@ function updateGame(now) {
             judgeHit(obj, obj.column);
         }
         obj.draw();
-        if (obj.y > canvas.height + 100) fallingObjs.splice(i, 1);
+        // 画面外に出たら削除（判定調整でミス判定がまだ済んでいないものは残す）
+        if (obj.y > canvas.height + 100 && (obj.hit || obj.missed)) fallingObjs.splice(i, 1);
     }
 
     drawHitZone();
@@ -506,7 +531,8 @@ function updateGame(now) {
 
 // 判定処理を行う関数
 function judgeHit(obj, col) {
-    const objCenter = obj.y + obj.height / 2;
+    const drawCenter = obj.y + obj.height / 2; // 画面上の位置（判定文字の表示用）
+    const objCenter = drawCenter - judgeOffsetPx; // 判定調整ぶんずらした位置で判定する
     let judge = null;
     let points = 0;
     let color = 'white';
@@ -529,7 +555,7 @@ function judgeHit(obj, col) {
         if (combo > maxCombo) maxCombo = combo;
     }
 
-    judgeTexts.push(new JudgeText(obj.x + obj.width / 2, objCenter, judge, color));
+    judgeTexts.push(new JudgeText(obj.x + obj.width / 2, drawCenter, judge, color));
     score += points;
     return judge !== 'MISS';
 }
@@ -558,6 +584,8 @@ document.addEventListener('keydown', e => {
     const col = keyMap[e.code];
     for (const obj of fallingObjs) {
         if (!obj.hit && !obj.missed && obj.column === col) {
+            // 判定バーから離れすぎているノーツは無視（ミスにしない・ノーツも消費しない）
+            if (obj.y + obj.height / 2 - judgeOffsetPx < earlyMissTop) break;
             obj.hit = true;
             judgeHit(obj, col);
             break;
@@ -580,8 +608,8 @@ function resetState() {
     stats = { fast: 0, perfect: 0, late: 0, miss: 0 };
     fallingObjs.length = 0;
     judgeTexts.length = 0;
-    lastCol = -1;
-    prevCol = -1;
+    lastCols = [];
+    prevCols = [];
     spawnTimer = 0;
     removeStatsChart();
     document.getElementById('pauseMenu').style.display = 'none';
@@ -589,8 +617,8 @@ function resetState() {
 
 // ===== 前回プレイした設定の保存・反映（クッキー） =====
 const LAST_CONFIG_KEY = 'otimonoLastConfig';
-const SAVED_VALUE_IDS = ['keyConfig', 'speedConfig', 'intervalConfig', 'bpmConfig', 'divisionConfig', 'clearComboConfig', 'clearScoreConfig', 'comboOpacityConfig'];
-const SAVED_CHECK_IDS = ['seConfig', 'autoPlayConfig'];
+const SAVED_VALUE_IDS = ['keyConfig', 'speedConfig', 'intervalConfig', 'bpmConfig', 'divisionConfig', 'clearComboConfig', 'clearScoreConfig', 'comboOpacityConfig', 'chordRateConfig', 'judgeOffsetConfig'];
+const SAVED_CHECK_IDS = ['seConfig', 'autoPlayConfig', 'chordConfig', 'sameLaneConfig'];
 
 // クッキーから値を取り出す（なければ null）
 function readCookie(name) {
@@ -655,7 +683,9 @@ const NUMBER_RULES = [
     { id: 'intervalConfig', min: 50, max: 2000 },
     { id: 'bpmConfig', min: 30, max: 400 },
     { id: 'clearComboConfig', min: 1, max: 10000, integer: true },
-    { id: 'clearScoreConfig', min: 1, max: 10000 }
+    { id: 'clearScoreConfig', min: 1, max: 10000 },
+    { id: 'chordRateConfig', min: 1, max: 100 },
+    { id: 'judgeOffsetConfig', min: -200, max: 200 }
 ];
 
 // キー設定を解析。1文字ずつキーとして扱うので「dasf」でも「D,A,S,F」でもよい（カンマ・読点・空白は区切りとして無視、全角文字も可）
@@ -737,6 +767,12 @@ function readConfig(config) {
     seEnabled = document.getElementById('seConfig').checked;
     comboOpacity = clamp(Number(document.getElementById('comboOpacityConfig').value), 0, 100) / 100;
     autoPlay = document.getElementById('autoPlayConfig').checked;
+    chordEnabled = document.getElementById('chordConfig').checked;
+    chordRate = clamp(Number(document.getElementById('chordRateConfig').value) || 20, 1, 100) / 100;
+    allowSameLane = document.getElementById('sameLaneConfig').checked;
+    // 判定調整：ms → 落下距離(px)。オートプレイは常に見た目どおりの位置で叩くので調整しない
+    const offsetMs = clamp(Number(document.getElementById('judgeOffsetConfig').value) || 0, -200, 200);
+    judgeOffsetPx = autoPlay ? 0 : fallingSpeed * FRAME_BASE * offsetMs / 1000;
 }
 
 // BPM指定時：最初のノーツがカウントイン後の拍の頭（ノーツ間隔のグリッド）で判定バーに届くよう、生成タイマーの初期値を決める
