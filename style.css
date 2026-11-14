@@ -127,7 +127,7 @@ p {
 }
 #startScreen h2 {
     font-size: clamp(18px, 5vw, 24px);
-    margin: 8px 0 12px;
+    margin: 6px 0 8px;
 }
 #startScreen button {
     font-size: clamp(18px, 5vw, 24px);
@@ -148,8 +148,11 @@ p {
 #configForm {
     width: 100%;
     max-width: 640px;
-    margin: 0 0 20px;
+    margin: 0 0 12px;
     font-size: clamp(14px, 4vw, 16px);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px 32px;
 }
 #configForm > div {
     display: flex;
@@ -157,7 +160,30 @@ p {
     justify-content: center;
     align-items: center;
     gap: 4px 8px;
-    margin: 8px 0;
+    margin: 0;
+}
+
+/* 幅に余裕がある時は2列にして、スクロールなしでウィンドウ内に収める
+   左列：キー〜クリア条件の8項目／右列：オプション6項目 */
+@media (min-width: 900px) {
+    #configForm {
+        max-width: 1120px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-rows: repeat(8, auto);
+        grid-auto-flow: column;
+    }
+}
+
+/* 高さの低いウィンドウ：余白と文字を詰める */
+@media (max-height: 640px) {
+    #startScreen { padding: 6px 16px; }
+    #startScreen h2 { font-size: clamp(16px, 4vw, 20px); margin: 4px 0 6px; }
+    #startScreen button { font-size: clamp(16px, 4vw, 20px); padding: 6px 18px; }
+    #startScreen #loadLastBtn { font-size: 14px; padding: 4px 12px; }
+    #configForm { margin-bottom: 8px; gap: 3px 32px; }
+    #configForm input[type="text"],
+    #configForm input[type="number"],
+    #configForm select { padding: 2px 6px; }
 }
 #configForm input[type="text"],
 #configForm input[type="number"],
